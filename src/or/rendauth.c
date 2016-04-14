@@ -35,6 +35,8 @@ static int add_to_file(FILE* password_file,
                       struct rend_auth_password_hashed_t* hashed_data,
                       enum rend_auth_hash_method_t hash_method);
 
+// TODO: authenticate and store in memory
+
 /**
  * Add the usernames and hashed salts and passwords used for
  * authenticating users through the introduction-points to the file referred to
@@ -86,7 +88,19 @@ static int add_to_file(FILE* password_file,
                 hashed_data->hash_len, b64_flags);
   base64_encode(b64_method, b64_size_method, (const char*)&method,
                 sizeof(int), b64_flags);
-  // TODO : implement the rest
+  size_t size_of_entry = sizeof(char) * 5 // 3 colons, a new line and a \0
+                       + b64_size_salt + b64_size_hash + b64_size_method
+                       + hashed_data->username_len;
+  char* entry = tor_malloc(size_of_entry);
+  size_t written = tor_snprintf(entry, size_of_entry, "%s:%s:%s:%s",
+                                hashed_data->username, b64_salt,
+                                b64_hash, b64_method);
+  fwrite(entry, sizeof(char), written, password_file);
+  // TODO : make sure this is correct
+  tor_free(b64_salt);
+  tor_free(b64_hash);
+  tor_free(b64_method);
+  tor_free(entry);
   return -1;
 }
 
