@@ -137,3 +137,60 @@ static int hash_user (struct rend_auth_password_t* user_data,
       return -1;
   }
 }
+static const char *str_userauth_ed25519 = "hidserv-userauth-ed25519";
+
+/**
+ * Generate an authorization siganture.Given a <b>keypair</b> 
+ * an <b>AUTH_KEYID</b> and an <b>ENC_KEYID</b> the function will
+ * generate the signature.
+ * Return 0 on success and -1 on failure.
+ */
+static int create_auth_signature(const ed25519_keypair_t *keypair,
+				 AUTH_KEYID, 
+				 ENC_KEYID)
+{
+  char rnd[256];
+  char *to_sign_block = NULL;
+  ed25519_signature_t sig;
+  crypto_rand(*rnd, sizeof(rnd));
+  char sha256digest[DIGEST256_LEN];
+  crypto_digest256(sha256digest, rnd, sizeof(rnd), DIGEST_SHA256);
+
+      //  "hidserv-userauth-ed25519"
+      //  Nonce       (same as above)
+      //  Pubkey      (same as above)
+      //  AUTH_KEYID  (As in the INTRODUCE1 cell)
+      //  ENC_KEYID   (As in the INTRODUCE1 cell)
+
+  smartlist_t *block = smartlist_new();
+  smartlist_add(block, str_userauth_ed25199);
+
+  char nonce[16];
+  memcpy(nonce, sha256digest, 16);
+
+  smartlist_add(block, nonce);
+
+  char ed_pub_b64[ED25519_BASE64_LEN + 1];
+  ret = ed25519_public_to_base64(ed_pub_b64, &keypair->pubkey);
+  if (ret < 0) {
+    log_warn(LD_BUG, "Can't base64 encode ed25199 public key!");
+    goto err;
+  }
+
+  smartlist_add(block, ed_pub_b64);
+  smartlist_add(block, AUTH_KEYID);
+  smartlist_add(block, ENC_KEYID);
+  to_sign_block = smartlist_join_strings(block, "", 0, NULL);
+  return ed25519_sign(&sig, to_sign_block, sizeof(to_sign_block), &keypair);
+}
+
+/**
+ * Verify <b>signature</b> of a <b>msg</b> and a <b>pubkey</b>.
+ * Return 0 if signature is valid, -1 if not.
+ */
+static int verify_signature(const ed25519_signature_t *signature, 
+			    const ed25519_public_key_t *pubkey,
+			    const uint8_t *msg)
+{
+  return ed25519_checksig(signature, msg, sizeof(*msg), pubkey);
+}
