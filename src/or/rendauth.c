@@ -1,6 +1,8 @@
 #include "or.h"
 #include "rendauth.h"
+#include "container.h"
 #include "crypto.h"
+#include "crypto_ed25519.h"
 
 /*
  * This section deals with authentication users through introduction-points
@@ -27,6 +29,14 @@ struct rend_auth_password_hashed_t {
   uint8_t* hash;
   size_t hash_len;
 };
+
+struct auth_keyid{
+  uint8_t* content;
+}
+
+struct enc_keyid{
+  uint8_t* content;
+}
 
 static int hash_user (struct rend_auth_password_t*,
                        struct rend_auth_password_hashed_t*,
@@ -132,12 +142,12 @@ static const char *str_userauth_ed25519 = "hidserv-userauth-ed25519";
  * Return 0 on success and -1 on failure.
  */
 static int create_auth_signature(const ed25519_keypair_t *keypair,
-				 AUTH_KEYID, 
-				 ENC_KEYID)
+				 const auth_keyid *auth, 
+				 const enc_keyid *enc
+				 ed25519_siganture_t *sig)
 {
   char rnd[256];
   char *to_sign_block = NULL;
-  ed25519_signature_t sig;
   crypto_rand(*rnd, sizeof(rnd));
   char sha256digest[DIGEST256_LEN];
   crypto_digest256(sha256digest, rnd, sizeof(rnd), DIGEST_SHA256);
@@ -158,14 +168,15 @@ static int create_auth_signature(const ed25519_keypair_t *keypair,
 
   char ed_pub_b64[ED25519_BASE64_LEN + 1];
   ret = ed25519_public_to_base64(ed_pub_b64, &keypair->pubkey);
+
   if (ret < 0) {
     log_warn(LD_BUG, "Can't base64 encode ed25199 public key!");
     goto err;
   }
 
   smartlist_add(block, ed_pub_b64);
-  smartlist_add(block, AUTH_KEYID);
-  smartlist_add(block, ENC_KEYID);
+  smartlist_add(block, auth);
+  smartlist_add(block, enc);
   to_sign_block = smartlist_join_strings(block, "", 0, NULL);
   return ed25519_sign(&sig, to_sign_block, sizeof(to_sign_block), &keypair);
 }
