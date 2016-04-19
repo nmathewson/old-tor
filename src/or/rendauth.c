@@ -30,14 +30,6 @@ struct rend_auth_password_hashed_t {
   size_t hash_len;
 };
 
-struct auth_keyid{
-  uint8_t* content;
-}
-
-struct enc_keyid{
-  uint8_t* content;
-}
-
 static int hash_user (struct rend_auth_password_t*,
                        struct rend_auth_password_hashed_t*,
                        enum rend_auth_hash_method_t);
@@ -133,7 +125,6 @@ static int hash_user (struct rend_auth_password_t* user_data,
       return -1;
   }
 }
-static const char *str_userauth_ed25519 = "hidserv-userauth-ed25519";
 
 /**
  * Generate an authorization siganture.Given a <b>keypair</b> 
@@ -141,53 +132,55 @@ static const char *str_userauth_ed25519 = "hidserv-userauth-ed25519";
  * generate the signature.
  * Return 0 on success and -1 on failure.
  */
-static int create_auth_signature(const ed25519_keypair_t *keypair,
+int create_auth_signature(const ed25519_keypair_t *keypair,
 				 const auth_keyid *auth, 
-				 const enc_keyid *enc
-				 ed25519_siganture_t *sig)
+				 const enc_keyid *enc,
+				 const ed25519_signature_t *sig)
 {
-  char rnd[256];
-  char *to_sign_block = NULL;
-  crypto_rand(*rnd, sizeof(rnd));
-  char sha256digest[DIGEST256_LEN];
-  crypto_digest256(sha256digest, rnd, sizeof(rnd), DIGEST_SHA256);
-
-      //  "hidserv-userauth-ed25519"
+  
+  //  "hidserv-userauth-ed25519"
       //  Nonce       (same as above)
       //  Pubkey      (same as above)
       //  AUTH_KEYID  (As in the INTRODUCE1 cell)
       //  ENC_KEYID   (As in the INTRODUCE1 cell)
 
   smartlist_t *block = smartlist_new();
-  smartlist_add(block, str_userauth_ed25199);
+  smartlist_add(block, "hidserv-userauth-ed25519");
 
+  char rnd[256];
+  crypto_rand(rnd, 256);
+  char sha256digest[DIGEST256_LEN];
+  crypto_digest256(sha256digest, rnd, sizeof(rnd), DIGEST_SHA256);
   char nonce[16];
   memcpy(nonce, sha256digest, 16);
-
   smartlist_add(block, nonce);
 
-  char ed_pub_b64[ED25519_BASE64_LEN + 1];
-  ret = ed25519_public_to_base64(ed_pub_b64, &keypair->pubkey);
+  //Not sure if base64 is needed
+  //char ed_pub_b64[ED25519_BASE64_LEN + 1];
+  //int ret;
+  //ret = ed25519_public_to_base64(ed_pub_b64, &keypair->pubkey);
+  //if (ret < 0) {
+   // log_warn(LD_BUG, "Can't base64 encode ed25199 public key!");
+  //  goto err;
+ // }
 
-  if (ret < 0) {
-    log_warn(LD_BUG, "Can't base64 encode ed25199 public key!");
-    goto err;
-  }
-
-  smartlist_add(block, ed_pub_b64);
-  smartlist_add(block, auth);
-  smartlist_add(block, enc);
+  smartlist_add(block, &keypair->pubkey);
+  smartlist_add(block, &auth->content);
+  smartlist_add(block, &enc->content);
+  char *to_sign_block = NULL;
   to_sign_block = smartlist_join_strings(block, "", 0, NULL);
-  return ed25519_sign(&sig, to_sign_block, sizeof(to_sign_block), &keypair);
+  size_t block_size = strlen((const char*) to_sign_block);
+  return ed25519_sign(sig, to_sign_block, block_size, keypair);
 }
 
 /**
  * Verify <b>signature</b> of a <b>msg</b> and a <b>pubkey</b>.
  * Return 0 if signature is valid, -1 if not.
  */
-static int verify_signature(const ed25519_signature_t *signature, 
+int verify_signature(const ed25519_signature_t *signature, 
 			    const ed25519_public_key_t *pubkey,
 			    const uint8_t *msg)
 {
-  return ed25519_checksig(signature, msg, sizeof(*msg), pubkey);
+  size_t strleng = strlen((const char*)msg);
+  return ed25519_checksig(signature, msg, strleng, pubkey);
 }
